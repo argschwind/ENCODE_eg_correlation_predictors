@@ -1,0 +1,14 @@
+
+# config file
+configfile: "config/config.yml"
+
+# add ABC DNase and H3K27ac files to config
+include: "scripts/add_abc_samples_to_config.py"
+
+# add rules to compute CRE - TSS correlations
+include: "rules/compute_cre_tss_correlations.smk"
+
+# create all input for DNase-seq correlations
+rule all:
+  input:
+    "results/correlation.DHS_tagAlign.100bp.tsv.gz"

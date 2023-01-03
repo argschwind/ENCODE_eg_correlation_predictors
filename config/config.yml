@@ -1,0 +1,9 @@
+
+# lookup table containing read files for ABC biosamples
+sample_files:
+  abc: "resources/ENCODE_lookup.combined.unique.tsv"
+  
+# sample_files: "/oak/stanford/groups/akundaje/kmualim/BenchmarkingPipeline_resources/metadata/ENCODE_lookup.combined.unique.tsv"
+
+# number of batches to split E-G pairs for parallel submission to cluster
+batches: 100
