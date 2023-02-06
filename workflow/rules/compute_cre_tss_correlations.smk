@@ -1,5 +1,16 @@
 ## Rules to compute CRE - TSS correlations using either DNase-only or DNase + RNA-seq
 
+# Python input functions ---------------------------------------------------------------------------
+
+# get mapped reads file (e.g. tagAlign or bam)
+def get_read_files(wildcards):
+  type = config["read_files"][wildcards.set]
+  files = list(str.split(config[wildcards.set][wildcards.sample][wildcards.assay], ","))
+  if type == "accession":
+    file_pattern = config['scratch'] + '/correlation/bam/{}.sorted.bam'
+    files = list(map(file_pattern.format, files))
+  return files
+
 # Create input -------------------------------------------------------------------------------------
 
 # download ENCODE cCREs
@@ -50,9 +61,9 @@ rule resize_cres:
 rule count_reads_cres:
   input:
     cres = "resources/GRCh38-cCREs.V4.sorted.{ext}bp.bed.gz",
-    reads = lambda wildcards: list(str.split(config['abc_samples'][wildcards.sample][wildcards.assay], ",")),
+    reads = get_read_files,
     chrs = "resources/GRCh38_EBV.chrom.sizes.tsv"
-  output: temp("results/cre_quantifications/{assay}/GRCh38-cCREs.V4.sorted.{ext}bp.{sample}.counts.bed.gz")
+  output: temp("results/{set}/cre_quantifications/{assay}/GRCh38-cCREs.V4.sorted.{ext}bp.{sample}.counts.bed.gz")
   conda: "../envs/cre_correlation_predictors.yml"
   shell:
     "bedtools coverage -counts -sorted -a {input.cres} -b {input.reads} -g {input.chrs} | "
@@ -62,9 +73,9 @@ rule count_reads_cres:
 rule count_reads_tss:
   input:
     tss = "resources/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.sorted.bed.gz",
-    reads = lambda wildcards: list(str.split(config['abc_samples'][wildcards.sample][wildcards.assay], ",")),
+    reads = get_read_files,
     chrs = "resources/GRCh38_EBV.chrom.sizes.tsv"
-  output: temp("results/tss_quantifications/{assay}/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.{sample}.counts.bed.gz")
+  output: temp("results/{set}/tss_quantifications/{assay}/tss_quantifications.{sample}.counts.bed.gz")
   conda: "../envs/cre_correlation_predictors.yml"
   shell:
     "bedtools coverage -counts -sorted -a {input.tss} -b {input.reads} -g {input.chrs} | "
@@ -73,37 +84,39 @@ rule count_reads_tss:
 # count reads in cCREs for all ABC samples, combine into one table and add original cCRE coordinates
 rule combine_counts_cres:
   input:
-    read_quant = expand("results/cre_quantifications/{{assay}}/GRCh38-cCREs.V4.sorted.{{ext}}bp.{sample}.counts.bed.gz",
-      sample = config['abc_samples']),
+    read_quant = lambda wildcards:
+      expand("results/{{set}}/cre_quantifications/{{assay}}/GRCh38-cCREs.V4.sorted.{{ext}}bp.{sample}.counts.bed.gz",
+        sample = config[wildcards.set]),
     elements = "resources/GRCh38-cCREs.V4.sorted.bed.gz"
-  output: "results/cre_quantifications/{assay}/GRCh38-cCREs.V4.sorted.{ext}bp.allSamples.counts.tsv.gz"
+  output: "results/{set}/cre_quantifications/{assay}/GRCh38-cCREs.V4.sorted.{ext}bp.allSamples.counts.tsv.gz"
   params:
     type = "cre"
   threads: 5
   conda: "../envs/cre_correlation_predictors.yml"
   script:
     "../scripts/combine_counts.R"
-    
+
 # count reads in TSSs for all ABC samples, combine into one table and add original cCRE coordinates
 rule combine_counts_tss:
   input:
-    read_quant = expand("results/tss_quantifications/{{assay}}/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.{sample}.counts.bed.gz",
-      sample = config['abc_samples']),
+    read_quant = lambda wildcards:
+      expand("results/tss_quantifications/{{assay}}/tss_quantifications.{sample}.counts.bed.gz",
+        sample = config[wildcards.set]),
     elements = "resources/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.bed.gz"
-  output: "results/tss_quantifications/{assay}/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.allSamples.counts.tsv.gz"
+  output: "results/{set}/tss_quantifications/{assay}/tss_quantifications.allSamples.counts.tsv.gz"
   params:
     type = "tss"
   threads: 5
   conda: "../envs/cre_correlation_predictors.yml"
   script:
     "../scripts/combine_counts.R"
-    
+
 # Compute correlation ------------------------------------------------------------------------------
     
 # normalize CRE or TSS quantifications for sequencing depth and log transform
 rule normalize_read_counts:
-  input: "results/{type}/{assay}/{file}.allSamples.counts.tsv.gz"
-  output: "results/{type}/{assay}/{file}.allSamples.counts.normalized.tsv.gz"
+  input: "results/{set}/{type}/{assay}/{file}.allSamples.counts.tsv.gz"
+  output: "results/{set}/{type}/{assay}/{file}.allSamples.counts.normalized.tsv.gz"
   conda: "../envs/cre_correlation_predictors.yml"
   resources:
     mem = "12G"
@@ -112,12 +125,12 @@ rule normalize_read_counts:
 
 # compute correlation and covariance matrices from quantifications between biosamples
 rule compute_cor_cov_matrices:
-  input: "results/{type}_quantifications/{assay}/{file}.allSamples.counts.normalized.tsv.gz"
+  input: "results/{set}/{type}_quantifications/{assay}/{file}.allSamples.counts.normalized.tsv.gz"
   output: 
-    cor_mat = "results/{type}_quantifications/{assay}/{file}.correlation_matrix.tsv",
-    cov_mat = "results/{type}_quantifications/{assay}/{file}.covariance_matrix.tsv",
-    cor_plot = "results/{type}_quantifications/{assay}/{file}.correlation_plot.pdf",
-    cov_plot = "results/{type}_quantifications/{assay}/{file}.covariance_plot.pdf"
+    cor_mat = "results/{set}/{type}_quantifications/{assay}/{file}.correlation_matrix.tsv",
+    cov_mat = "results/{set}/{type}_quantifications/{assay}/{file}.covariance_matrix.tsv",
+    cor_plot = "results/{set}/{type}_quantifications/{assay}/{file}.correlation_plot.pdf",
+    cov_plot = "results/{set}/{type}_quantifications/{assay}/{file}.covariance_plot.pdf"
   conda: "../envs/cre_correlation_predictors.yml"
   script:
     "../scripts/compute_cor_cov_matrices.R"
@@ -127,7 +140,7 @@ rule make_cre_gene_pairs:
   input:
     cres = "resources/GRCh38-cCREs.V4.sorted.bed.gz",
     tss  = "resources/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.sorted.bed.gz"
-  output: temp("results/cre_gene_pairs.tsv.gz")
+  output: temp("results/cre_gene_pairs/cre_gene_pairs.tsv.gz")
   params:
     max_dist = 1e6
   conda: "../envs/cre_correlation_predictors.yml"
@@ -136,9 +149,9 @@ rule make_cre_gene_pairs:
 
 # split pairs into batches
 rule split_pairs_batches:
-  input: "results/cre_gene_pairs.tsv.gz"
+  input: "results/cre_gene_pairs/cre_gene_pairs.tsv.gz"
   output:
-    temp(expand("results/batches/cre_gene_pairs.batch{batch}.tsv.gz",
+    temp(expand("results/cre_gene_pairs/cre_gene_pairs.batch{batch}.tsv.gz",
       batch = [*range(1, config["batches"] + 1)]))
   conda: "../envs/cre_correlation_predictors.yml"
   resources:
@@ -149,12 +162,12 @@ rule split_pairs_batches:
 # compute simple correlation
 rule compute_correlation:
   input:
-    pairs = "results/batches/cre_gene_pairs.batch{batch}.tsv.gz",
-    cres = "results/cre_quantifications/{assay}/GRCh38-cCREs.V4.sorted.{ext}bp.allSamples.counts.normalized.tsv.gz",
-    tss  = "results/tss_quantifications/{assay}/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.allSamples.counts.normalized.tsv.gz",
-    cre_cor = "results/cre_quantifications/{assay}/GRCh38-cCREs.V4.sorted.{ext}bp.correlation_matrix.tsv"
-  output: temp("results/{method}/cor_output.{assay}.{ext}bp.batch{batch}.tsv.gz")
-  log: "results/logs/compute_correlation.{method}.{assay}.{ext}bp.batch{batch}.log"
+    pairs = "results/cre_gene_pairs/cre_gene_pairs.batch{batch}.tsv.gz",
+    cres = "results/{set}/cre_quantifications/{cre_assay}/GRCh38-cCREs.V4.sorted.{ext}bp.allSamples.counts.normalized.tsv.gz",
+    tss  = "results/{set}/tss_quantifications/{tss_assay}/tss_quantifications.allSamples.counts.normalized.tsv.gz",
+    cre_cor = "results/{set}/cre_quantifications/{cre_assay}/GRCh38-cCREs.V4.sorted.{ext}bp.correlation_matrix.tsv"
+  output: temp("results/{set}/{method}/cor_output.{cre_assay}-{tss_assay}.{ext}bp.batch{batch}.tsv.gz")
+  log: "results/{set}/logs/compute_correlation.{method}.{cre_assay}-{tss_assay}.{ext}bp.batch{batch}.log"
   params:
     min_reads = 1
   threads: 24
@@ -168,9 +181,9 @@ rule compute_correlation:
 # combine results from chromosomes
 rule combine_batches:
   input:
-    expand("results/{{method}}/cor_output.{{assay}}.{{ext}}bp.batch{batch}.tsv.gz",
+    expand("results/{{set}}/{{method}}/cor_output.{{cre_assay}}-{{tss_assay}}.{{ext}}bp.batch{batch}.tsv.gz",
       batch = [*range(1, config["batches"] + 1)])
-  output: "results/{method}/cor_output.{assay}.{ext}bp.tsv.gz"
+  output: "results/{set}/{method}/cor_output.{cre_assay}-{tss_assay}.{ext}bp.tsv.gz"
   conda: "../envs/cre_correlation_predictors.yml"
   resources:
     mem = "16G"
@@ -182,25 +195,24 @@ rule combine_batches:
 # compute all correlation measurements
 rule combine_all_correlations:
   input:
-    expand("results/{method}/cor_output.{{assay}}.{{ext}}bp.tsv.gz",
+    expand("results/{{set}}/{method}/cor_output.{{cre_assay}}-{{tss_assay}}.{{ext}}bp.tsv.gz",
       method = ["pearson", "spearman", "gls"])
-  output: "results/correlation.{assay}.{ext}bp.tsv.gz"
+  output: "results/{set}/correlation.{cre_assay}-{tss_assay}.{ext}bp.tsv.gz"
   conda: "../envs/cre_correlation_predictors.yml"
   resources:
     mem = "48G"
   script:
     "../scripts/combine_correlations.R"
     
-# # create E-P benchmarking prediction files
-# rule create_predictions:
-#   input:
-#     cres = "results/cre_quantifications/{assay}/GRCh38-cCREs.V4.sorted.{ext}bp.allSamples.counts.bed.gz",
-#     tss  = "results/tss_quantifications/{assay}/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.allSamples.counts.bed.gz",
-#     cor  = expand("results/{method}/cor_output.{{assay}}.{{ext}}bp.tsv.gz",
-#                   method = ['pearson', 'spearman', 'gls'])
-#   output: "results/Correlation.predictions.{assay}.{ext}bp.tsv.gz"
-#   conda: "../envs/cre_correlation_predictors.yml"
-#   resources:
-#     mem = "48G"
-#   script:
-#     "../scripts/ep_benchmarking_predictions.R"
+# create E-P benchmarking prediction files
+rule create_prediction_files:
+  input:
+    cres = "resources/GRCh38-cCREs.V4.sorted.bed.gz",
+    tss  = "resources/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.sorted.bed.gz",
+    cor = "results/{set}/correlation.{cre_assay}-{tss_assay}.{ext}bp.tsv.gz"
+  output: "results/{set}/correlation.{cre_assay}-{tss_assay}.{ext}bp.predictions.tsv.gz"
+  conda: "../envs/cre_correlation_predictors.yml"
+  resources:
+    mem = "12G"
+  script:
+    "../scripts/ep_benchmarking_predictions.R"

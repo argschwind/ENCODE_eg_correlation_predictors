@@ -1,6 +1,6 @@
 ## Compute correlations between CRE and TSS activity or fit GLS models
 
-# save.image("corrTSS.rda")
+# save.image("compute_correlation.rda")
 # stop()
 
 # opening log file to collect all messages, warnings and errors
@@ -32,22 +32,27 @@ message("Loading data")
 # load E-G pairs
 pairs <- fread(snakemake@input$pairs)
 
-# load normalized cre and tss read counts
+# load normalized CRE and TSS read counts
 cre_quants <- fread(snakemake@input$cres)
 tss_quants <- fread(snakemake@input$tss) 
 
-# convert cre and tss read counts to matrices
+# convert CRE and TSS read counts to matrices
 cre_quants_mat <- as.matrix(cre_quants[, -1], rownames = cre_quants$id)
 tss_quants_mat <- as.matrix(tss_quants[, -1], rownames = tss_quants$id)
 
-# get any cres or TSS with at least a minimum number of reads
+# make sure that samples (columns) are the same (and same order) for CRE and TSS quantifications
+samples <- intersect(colnames(cre_quants_mat), colnames(tss_quants_mat))
+cre_quants_mat <- cre_quants_mat[, samples]
+tss_quants_mat <- tss_quants_mat[, samples]
+
+# get any CREs or TSS with at least a minimum number of reads
 cre_quants_mat <- cre_quants_mat[rowSums(cre_quants_mat) >= snakemake@params$min_reads, ]
 tss_quants_mat <- tss_quants_mat[rowSums(tss_quants_mat) >= snakemake@params$min_reads, ]
 
-# create simplified table of pairs with only cre and ids
+# create simplified table of pairs with only CRE and TSS ids
 pairs <- data.table(cre = paste0(pairs$V1, ":", pairs$V2, "-", pairs$V3), tss = pairs$V10)
 
-# filter pairs for cres and TSSs passing the filter
+# filter pairs for CREs and TSSs in quantification matrices and passing the minimum reads filter
 pairs <- pairs[pairs$cre %in% rownames(cre_quants_mat) & pairs$tss %in% rownames(tss_quants_mat), ]
 
 # load and process correlation matrix if GLS is used as method -------------------------------------
@@ -85,7 +90,7 @@ try_compute_cor <- function(cor_function, pair, cre_quants, tss_quants, ...) {
     })
 }
 
-# function to compute simple correlation coefficient(s) for one E-G pair
+# function to compute pearson or spearman correlation coefficient for one E-G pair
 compute_simple_cor <- function(pair, cre_quants, tss_quants, method) {
   cor_coeff <- cor(cre_quants[pair[[1]], ], tss_quants[pair[[2]], ], method = method)
   setNames(data.frame(pair[[1]], pair[[2]], cor_coeff), c("cre", "tss", method))
@@ -109,7 +114,7 @@ compute_gls <- function(pair, cre_quants, tss_quants, cor_structure = NULL) {
   
 }
 
-# compute correlation of fit models ----------------------------------------------------------------
+# compute correlation or fit models ----------------------------------------------------------------
 
 # split pairs into list for parallel lapply
 pairs <- asplit(pairs, MARGIN = 1)

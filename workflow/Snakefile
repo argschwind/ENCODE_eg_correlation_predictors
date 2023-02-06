@@ -5,10 +5,15 @@ configfile: "config/config.yml"
 # add ABC DNase and H3K27ac files to config
 include: "scripts/add_abc_samples_to_config.py"
 
+# add DNase and RNA files for RNA-seq samples to config
+include: "scripts/add_rna_samples_to_config.py"
+
 # add rules to compute CRE - TSS correlations
 include: "rules/compute_cre_tss_correlations.smk"
+include: "rules/dnase_rna_correlation.smk"
 
-# create all input for DNase-seq correlations
+# compute all correlations
 rule all:
   input:
-    "results/correlation.DHS_tagAlign.100bp.tsv.gz"
+    "results/RNA_samples/correlation.DNase_seq-RNA_seq.100bp.tsv.gz",
+    "results/ABC_samples/correlation.DHS_tagAlign-DHS_tagAlign.100bp.tsv.gz"

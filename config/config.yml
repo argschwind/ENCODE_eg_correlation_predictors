@@ -1,9 +1,16 @@
 
 # lookup table containing read files for ABC biosamples
 sample_files:
-  abc: "resources/ENCODE_lookup.combined.unique.tsv"
+  ABC_samples: "config/ENCODE_lookup.combined.unique.tsv"
+  RNA_samples: "config/RNA-seq_Encode_E2G_PolyA_RNAseq.tsv"
   
-# sample_files: "/oak/stanford/groups/akundaje/kmualim/BenchmarkingPipeline_resources/metadata/ENCODE_lookup.combined.unique.tsv"
-
+# specify whether files listed in lookup tables are file paths or ENCODE file accession ids
+read_files:
+  ABC_samples: "path"
+  RNA_samples: "accession"
+  
+# base directory for storing downloaded bam files
+scratch: "/scratch/users/agschwin"
+  
 # number of batches to split E-G pairs for parallel submission to cluster
 batches: 100
