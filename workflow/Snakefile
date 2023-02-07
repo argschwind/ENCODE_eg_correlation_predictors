@@ -2,11 +2,8 @@
 # config file
 configfile: "config/config.yml"
 
-# add ABC DNase and H3K27ac files to config
-include: "scripts/add_abc_samples_to_config.py"
-
-# add DNase and RNA files for RNA-seq samples to config
-include: "scripts/add_rna_samples_to_config.py"
+# add input files to snakemake config object
+include: "scripts/add_samples_to_config.py"
 
 # add rules to compute CRE - TSS correlations
 include: "rules/compute_cre_tss_correlations.smk"
