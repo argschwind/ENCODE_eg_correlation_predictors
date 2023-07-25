@@ -1,16 +1,28 @@
 
 # lookup table containing read files for ABC biosamples
 sample_files:
-  ABC_samples: "config/ENCODE_lookup.combined.unique.tsv"
-  RNA_samples: "config/RNA-seq_Encode_E2G_PolyA_RNAseq.tsv"
+  DNase: "config/dnase_dnase_corr_input_files.tsv"
+  RNA: "config/dnase_rna_corr_input_files.tsv"
   
-# specify whether files listed in lookup tables are file paths or ENCODE file accession ids
+# url to download RNA count matrix
+rna_matrix_url: "https://mitra.stanford.edu/engreitz/oak/public/encode_distal_regulation/PolyA_RNAseq.TPMs.matrix.gz"
+
+# run type for each bam file
+bam_metadata:
+  DNase: "config/dnase_dnase_corr_dnase_bam_metadata.tsv"
+  RNA: "config/dnase_rna_corr_dnase_bam_metadata.tsv"
+  
+# specify whether files listed in lookup tables are local file paths or ENCODE file accession ids
 read_files:
-  ABC_samples: "path"
-  RNA_samples: "accession"
+  DNase: "accession"
+  RNA: "accession"
   
 # base directory for storing downloaded bam files
 scratch: "/scratch/users/agschwin"
   
 # number of batches to split E-G pairs for parallel submission to cluster
 batches: 100
+
+# correlation metrics to compute
+#methods: ["pearson", "spearman", "gls"]
+methods: ["pearson", "spearman"]

@@ -6,3 +6,5 @@
 *.Rproj
 results/
 slurm_logs/
+DEPRECATED
+workflow/scripts/helper_scripts

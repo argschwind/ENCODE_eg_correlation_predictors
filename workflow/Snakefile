@@ -5,12 +5,15 @@ configfile: "config/config.yml"
 # add input files to snakemake config object
 include: "scripts/add_samples_to_config.py"
 
+# add metadata for used bam files to config object
+include: "scripts/add_bam_metadata_to_config.py"
+
 # add rules to compute CRE - TSS correlations
 include: "rules/compute_cre_tss_correlations.smk"
-include: "rules/dnase_rna_correlation.smk"
+include: "rules/create_rna_input.smk"
 
 # compute all correlations
 rule all:
   input:
-    "results/RNA_samples/correlation.DNase_seq-RNA_seq.100bp.tsv.gz",
-    "results/ABC_samples/correlation.DHS_tagAlign-DHS_tagAlign.100bp.tsv.gz"
+    "results/DNase/correlation.DNase_seq-DNase_seq.100bp.tsv.gz",
+    "results/RNA/correlation.DNase_seq-RNA_seq.100bp.tsv.gz"

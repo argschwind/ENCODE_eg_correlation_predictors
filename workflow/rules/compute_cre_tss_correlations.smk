@@ -7,11 +7,14 @@ def get_read_files(wildcards):
   type = config["read_files"][wildcards.set]
   files = list(str.split(config[wildcards.set][wildcards.sample][wildcards.assay], ","))
   if type == "accession":
-    file_pattern = config['scratch'] + '/correlation/bam/{}.sorted.bam'
+    file_pattern = config['scratch'] + '/correlation/bam/{}.filtered.sorted.bam'
     files = list(map(file_pattern.format, files))
   return files
   
 # Download bam files from ENCODE portal ------------------------------------------------------------
+
+# make sure that workflow does not attempt to download "filtered" bam files
+ruleorder: sort_bam > filter_bam > download_bam
 
 # download bam file from ENCODE portal
 rule download_bam:
@@ -22,12 +25,32 @@ rule download_bam:
   shell:
     "wget -O {output} {params.base_url}/{wildcards.accession}/@@download/{wildcards.accession}.bam"
     
+# filter single-ended bam files
+rule filter_bam:
+  input: config["scratch"] + "/correlation/bam/{accession}.bam"
+  output: temp(config["scratch"] + "/correlation/bam/{accession}.filtered.bam")
+  params:
+    type = lambda wildcards: config["bam_metadata"][wildcards.accession]["run_type"]
+  conda: "../envs/cre_correlation_predictors.yml"
+  resources:
+    mem = "32G",
+    time = "4:00:00"
+  shell:
+    """
+    if [[ {params.type} == single-ended ]]
+    then
+      samtools view -hb -F 780 -q 30 {input} > {output}
+    else
+      mv {input} {output}
+    fi
+    """
+    
 # sort and index bam files
 rule sort_bam:
-  input: config["scratch"] + "/correlation/bam/{accession}.bam"
+  input: config["scratch"] + "/correlation/bam/{accession}.filtered.bam"
   output:
-    bam = config["scratch"] + "/correlation/bam/{accession}.sorted.bam",
-    bai = config["scratch"] + "/correlation/bam/{accession}.sorted.bam.bai"
+    bam = config["scratch"] + "/correlation/bam/{accession}.filtered.sorted.bam",
+    bai = config["scratch"] + "/correlation/bam/{accession}.filtered.sorted.bam.bai"
   conda: "../envs/cre_correlation_predictors.yml"
   resources:
     mem = "32G",
@@ -72,7 +95,7 @@ rule resize_cres:
   input: 
     cres = "resources/GRCh38-cCREs.V4.sorted.bed.gz",
     chrs = "resources/GRCh38_EBV.chrom.sizes.tsv"
-  output: "resources/GRCh38-cCREs.V4.sorted.{ext}bp.bed.gz"
+  output: temp("resources/GRCh38-cCREs.V4.sorted.{ext}bp.bed.gz")
   conda: "../envs/cre_correlation_predictors.yml"
   shell:
     "zcat {input.cres} | "
@@ -99,7 +122,7 @@ rule count_reads_tss:
     tss = "resources/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.sorted.bed.gz",
     reads = get_read_files,
     chrs = "resources/GRCh38_EBV.chrom.sizes.tsv"
-  output: temp("results/{set}/tss_quantifications/{assay}/tss_quantifications.{sample}.counts.bed.gz")
+  output: temp("results/{set}/tss_quantifications/{assay}/GRCh38-RefSeqCurated-TSS.sorted.500bp.{sample}.counts.bed.gz")
   conda: "../envs/cre_correlation_predictors.yml"
   shell:
     "bedtools coverage -counts -sorted -a {input.tss} -b {input.reads} -g {input.chrs} | "
@@ -124,7 +147,7 @@ rule combine_counts_cres:
 rule combine_counts_tss:
   input:
     read_quant = lambda wildcards:
-      expand("results/{{set}}/tss_quantifications/{{assay}}/tss_quantifications.{sample}.counts.bed.gz",
+      expand("results/{{set}}/tss_quantifications/{{assay}}/GRCh38-RefSeqCurated-TSS.sorted.500bp.{sample}.counts.bed.gz",
         sample = config[wildcards.set]),
     elements = "resources/RefSeqCurated.170308.bed.CollapsedGeneBounds.hg38.TSS500bp.bed.gz"
   output: "results/{set}/tss_quantifications/{assay}/tss_quantifications.allSamples.counts.tsv.gz"
@@ -220,7 +243,7 @@ rule combine_batches:
 rule combine_all_correlations:
   input:
     expand("results/{{set}}/{method}/cor_output.{{cre_assay}}-{{tss_assay}}.{{ext}}bp.tsv.gz",
-      method = ["pearson", "spearman", "gls"])
+      method = config["methods"])
   output: "results/{set}/correlation.{cre_assay}-{tss_assay}.{ext}bp.tsv.gz"
   conda: "../envs/cre_correlation_predictors.yml"
   resources:

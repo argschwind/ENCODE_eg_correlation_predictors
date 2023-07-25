@@ -18,16 +18,18 @@ suppressPackageStartupMessages({
 
 # register parallel backend if specified (if more than 1 thread provided)
 if (snakemake@threads > 1) {
-  message("Registering parallel backend with ", snakemake@threads, " cores.")
+  message("\nRegistering parallel backend with ", snakemake@threads, " cores:")
   register(MulticoreParam(workers = snakemake@threads))
+  bpparam()
 } else {
-  message("Registering serial backend.")
+  message("\nRegistering serial backend:")
   register(SerialParam())
+  bpparam()
 }
 
 # prepare data -------------------------------------------------------------------------------------
 
-message("Loading data")
+message("\nLoading data")
 
 # load E-G pairs
 pairs <- fread(snakemake@input$pairs)
@@ -62,6 +64,8 @@ method <- snakemake@wildcards$method
 
 # if gls is specified load cre sample correlation matrix and create correlation structure for gls
 if (method == "gls") {
+  
+  message("Setting up correlation structure for GLS")
   
   # load cre correlation matrix
   cre_cor_mat <- as.matrix(read.table(snakemake@input$cre_cor, header = TRUE, sep = "\t"))
@@ -107,8 +111,8 @@ compute_gls <- function(pair, cre_quants, tss_quants, cor_structure = NULL) {
   
   # extract coefficient and p-values to create output
   t_table <- summary(fit)$tTable
-  output <- data.table(cre = pair[[1]], tss = pair[[2]], coefficient = t_table["cre", "Value"],
-                       pvalue  = t_table["cre", "p-value"])
+  output <- data.table(cre = pair[[1]], tss = pair[[2]], glsCoefficient = t_table["cre", "Value"],
+                       glsPvalue  = t_table["cre", "p-value"])
   
   return(output)
   
@@ -120,8 +124,9 @@ compute_gls <- function(pair, cre_quants, tss_quants, cor_structure = NULL) {
 pairs <- asplit(pairs, MARGIN = 1)
 
 # compute correlation or fit across all pairs
-if (method %in% c("pearson", "kendall", "spearman")) {
-  
+message("Computing correlations")
+if (method %in% c("pearson", "spearman")) {
+  bpparam()
   output <- bplapply(pairs, FUN = try_compute_cor, cor_function = compute_simple_cor,
                      cre_quants = cre_quants_mat, tss_quants = tss_quants_mat, method = method)
   
@@ -133,7 +138,8 @@ if (method %in% c("pearson", "kendall", "spearman")) {
   
 } else {
   
-  stop("Invalid method wildard value: ", method)
+  stop("Invalid method wildard value: ", method,
+       ". Needs to be one of 'pearson', 'spearman' or 'gls'")
   
 }
 
@@ -141,6 +147,7 @@ if (method %in% c("pearson", "kendall", "spearman")) {
 output <- rbindlist(output)
 
 # save output to file
+message("Writing results to output file")
 fwrite(output, file = snakemake@output[[1]], sep = "\t")
 
 message("Done!")
