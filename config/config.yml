@@ -24,5 +24,4 @@ scratch: "/scratch/users/agschwin"
 batches: 100
 
 # correlation metrics to compute
-#methods: ["pearson", "spearman", "gls"]
-methods: ["pearson", "spearman"]
+methods: ["pearson", "spearman", "gls"]
